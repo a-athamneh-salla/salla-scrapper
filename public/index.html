@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Website Scraper</title>
+  <style>
+    :root {
+      --primary-color: #4a6cf7;
+      --background-color: #f5f7ff;
+      --text-color: #333;
+      --card-bg: #fff;
+      --border-color: #e8e8e8;
+      --success-color: #28a745;
+      --error-color: #dc3545;
+      --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      line-height: 1.6;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      color: var(--primary-color);
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    .checkbox-group {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+    }
+    .checkbox-group label {
+        margin-bottom: 0;
+        margin-left: 8px;
+    }
+
+
+    .button {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 500;
+      transition: background-color 0.3s;
+      display: inline-block;
+    }
+
+    .button:hover {
+      background-color: #3a5bd9;
+    }
+
+    .result-section {
+      margin-top: 30px;
+      display: none;
+    }
+
+    .tab-nav {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 15px;
+    }
+
+    .tab {
+      padding: 10px 15px;
+      cursor: pointer;
+      border-radius: 4px 4px 0 0;
+      margin-right: 5px;
+      background-color: #eee;
+    }
+
+    .tab.active {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .color-swatch {
+      display: inline-block;
+      width: 25px;
+      height: 25px;
+      border-radius: 4px;
+      margin-right: 8px;
+      border: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    .color-item {
+      margin-bottom: 5px;
+    }
+
+    .metadata-item, .link-item {
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .metadata-item:last-child, .link-item:last-child {
+      border-bottom: none;
+    }
+
+    .policy-content {
+      white-space: pre-wrap; /* Changed from pre-line for better formatting */
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      padding: 15px;
+      border-radius: 4px;
+      background-color: #fafafa;
+      margin-top: 10px;
+      font-family: monospace; /* Use monospace for better readability */
+    }
+
+    .loader {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-top: 4px solid var(--primary-color);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .toggle-content {
+      margin-top: 10px;
+      color: var(--primary-color);
+      cursor: pointer;
+      font-weight: 500;
+      display: inline-block;
+      font-size: 0.9em;
+    }
+
+    .error-message {
+      color: var(--error-color);
+      padding: 10px;
+      background-color: rgba(220, 53, 69, 0.1);
+      border-radius: 4px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .success-message {
+      color: var(--success-color);
+      padding: 10px;
+      background-color: rgba(40, 167, 69, 0.1);
+      border-radius: 4px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .social-link {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .social-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 10px;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      /* Basic fallback icon */
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ccc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8-8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>');
+    }
+
+    .json-output {
+      width: 100%;
+      height: 400px;
+      overflow: auto;
+      font-family: monospace;
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      white-space: pre-wrap;
+      box-sizing: border-box;
+    }
+    pre {
+        margin: 0; /* Reset default pre margin */
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Website Scraper</h1>
+
+    <div class="card">
+      <div class="form-group">
+        <label for="url-input">Enter Website URL:</label>
+        <input type="text" id="url-input" placeholder="https://example.com">
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="fetch-content" checked>
+        <label for="fetch-content">Fetch content of policy pages</label>
+      </div>
+
+      <button class="button" id="scrape-button">Scrape Website</button>
+      <div class="loader" id="loader"></div>
+      <div class="error-message" id="error-message"></div>
+      <div class="success-message" id="success-message"></div>
+    </div>
+
+    <div class="result-section" id="result-section">
+      <div class="tab-nav">
+        <div class="tab active" data-tab="metadata">Metadata</div>
+        <div class="tab" data-tab="colors">Colors</div>
+        <div class="tab" data-tab="social">Social Media</div>
+        <div class="tab" data-tab="policies">Policies</div>
+        <div class="tab" data-tab="json">Raw JSON</div>
+      </div>
+
+      <div class="tab-content active" id="metadata-tab">
+        <div class="card">
+          <h2>Website Metadata</h2>
+          <div id="metadata-content"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="colors-tab">
+        <div class="card">
+          <h2>Color Palette</h2>
+          <div id="colors-content"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="social-tab">
+        <div class="card">
+          <h2>Social Media Links</h2>
+          <div id="social-content"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="policies-tab">
+        <div class="card">
+          <h2>Policy Pages</h2>
+          <div id="policies-content"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="json-tab">
+        <div class="card">
+          <h2>Raw JSON Response</h2>
+          <pre id="json-content" class="json-output"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const urlInput = document.getElementById('url-input');
+      const fetchContentCheckbox = document.getElementById('fetch-content');
+      const scrapeButton = document.getElementById('scrape-button');
+      const loader = document.getElementById('loader');
+      const errorMessage = document.getElementById('error-message');
+      const successMessage = document.getElementById('success-message');
+      const resultSection = document.getElementById('result-section');
+
+      // Tab navigation
+      const tabs = document.querySelectorAll('.tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+          });
+          const tabId = tab.getAttribute('data-tab');
+          document.getElementById(tabId + '-tab').classList.add('active');
+        });
+      });
+
+      scrapeButton.addEventListener('click', async () => {
+        const url = urlInput.value.trim();
+        const fetchContent = fetchContentCheckbox.checked;
+
+        if (!url) {
+          showError('Please enter a valid URL');
+          return;
+        }
+
+        // Basic URL validation
+        try {
+            new URL(url); // Check if it's a valid URL structure
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                throw new Error('URL must start with http:// or https://');
+            }
+        } catch (_) {
+            showError('Invalid URL format. Please include http:// or https://');
+            return;
+        }
+
+
+        resetUI();
+        showLoader();
+
+        try {
+          // Construct the API URL relative to the current host
+          const apiUrl = `/api/scrape?url=${encodeURIComponent(url)}&fetchContent=${fetchContent}`;
+          const response = await fetch(apiUrl);
+
+          // Try to parse JSON, handle potential text errors
+          let data;
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") !== -1) {
+              data = await response.json();
+          } else {
+              const textError = await response.text();
+              throw new Error(`Received non-JSON response: ${response.status} ${response.statusText}. Body: ${textError}`);
+          }
+
+
+          if (!response.ok) {
+            // Use error message from API if available, otherwise use status text
+            throw new Error(data.error || `HTTP error: ${response.status} ${response.statusText}`);
+          }
+
+          if (data.error) { // Handle application-level errors returned in JSON
+            throw new Error(data.error);
+          }
+
+          displayResults(data);
+          showSuccess('Website scraped successfully!');
+
+        } catch (error) {
+          console.error('Scraping error:', error); // Log the full error for debugging
+          showError(`Scraping failed: ${error.message || 'Unknown error'}`);
+        } finally {
+          hideLoader();
+        }
+      });
+
+      function resetUI() {
+        errorMessage.style.display = 'none';
+        errorMessage.textContent = '';
+        successMessage.style.display = 'none';
+        successMessage.textContent = '';
+        resultSection.style.display = 'none';
+        document.getElementById('metadata-content').innerHTML = '';
+        document.getElementById('colors-content').innerHTML = '';
+        document.getElementById('social-content').innerHTML = '';
+        document.getElementById('policies-content').innerHTML = '';
+        document.getElementById('json-content').textContent = '';
+        // Reset tabs to default
+        tabs.forEach(t => t.classList.remove('active'));
+        document.querySelector('.tab[data-tab="metadata"]').classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById('metadata-tab').classList.add('active');
+      }
+
+      function showLoader() {
+        loader.style.display = 'block';
+        scrapeButton.disabled = true;
+      }
+
+      function hideLoader() {
+        loader.style.display = 'none';
+        scrapeButton.disabled = false;
+      }
+
+      function showError(message) {
+        errorMessage.style.display = 'block';
+        errorMessage.textContent = message;
+        successMessage.style.display = 'none'; // Hide success message if error occurs
+      }
+
+      function showSuccess(message) {
+        successMessage.style.display = 'block';
+        successMessage.textContent = message;
+        errorMessage.style.display = 'none'; // Hide error message if success occurs
+      }
+
+      function displayResults(data) {
+        // Display metadata
+        const metadataContent = document.getElementById('metadata-content');
+        metadataContent.innerHTML = ''; // Clear previous results
+        if (data.metadata && Object.keys(data.metadata).length > 0) {
+          addMetadataItem(metadataContent, 'URL Scraped', data.url); // Add the scraped URL
+          if (data.metadata.title) addMetadataItem(metadataContent, 'Title', data.metadata.title);
+          if (data.metadata.description) addMetadataItem(metadataContent, 'Description', data.metadata.description);
+          if (data.metadata.keywords) addMetadataItem(metadataContent, 'Keywords', data.metadata.keywords);
+          if (data.metadata.author) addMetadataItem(metadataContent, 'Author', data.metadata.author);
+          if (data.metadata.favicon) {
+            const faviconItem = document.createElement('div');
+            faviconItem.className = 'metadata-item';
+            faviconItem.innerHTML = `<strong>Favicon:</strong> <img src="${data.metadata.favicon}" width="16" height="16" style="vertical-align: middle; margin-left: 5px; margin-right: 5px;" alt="favicon"> <a href="${data.metadata.favicon}" target="_blank" rel="noopener noreferrer">${data.metadata.favicon}</a>`;
+            metadataContent.appendChild(faviconItem);
+          }
+          if (data.metadata.ogTags && Object.keys(data.metadata.ogTags).length > 0) {
+            addTagList(metadataContent, 'Open Graph Tags', data.metadata.ogTags);
+          }
+          if (data.metadata.twitterTags && Object.keys(data.metadata.twitterTags).length > 0) {
+            addTagList(metadataContent, 'Twitter Card Tags', data.metadata.twitterTags);
+          }
+        } else {
+            metadataContent.textContent = 'No metadata detected.';
+        }
+
+
+        // Display colors
+        const colorsContent = document.getElementById('colors-content');
+        colorsContent.innerHTML = ''; // Clear previous results
+        if (data.colors && data.colors.length > 0) {
+          data.colors.forEach(color => {
+            const colorItem = document.createElement('div');
+            colorItem.className = 'color-item';
+            const colorSwatch = document.createElement('span');
+            colorSwatch.className = 'color-swatch';
+            try { // Add error handling for invalid colors
+                colorSwatch.style.backgroundColor = color;
+            } catch (e) {
+                console.warn(`Invalid color value: ${color}`);
+                colorSwatch.style.border = '1px dashed red'; // Indicate invalid color
+            }
+            colorItem.appendChild(colorSwatch);
+            colorItem.appendChild(document.createTextNode(color));
+            colorsContent.appendChild(colorItem);
+          });
+        } else {
+          colorsContent.textContent = 'No colors detected.';
+        }
+
+        // Display social media links
+        const socialContent = document.getElementById('social-content');
+        socialContent.innerHTML = ''; // Clear previous results
+        let hasSocial = false;
+        if (data.socialMediaLinks) {
+          const socialPlatforms = [
+            { key: 'facebook', name: 'Facebook' }, { key: 'twitter', name: 'Twitter' },
+            { key: 'instagram', name: 'Instagram' }, { key: 'linkedin', name: 'LinkedIn' },
+            { key: 'youtube', name: 'YouTube' }, { key: 'pinterest', name: 'Pinterest' },
+            { key: 'github', name: 'GitHub' }
+          ];
+          socialPlatforms.forEach(platform => {
+            if (data.socialMediaLinks[platform.key]) {
+              addSocialLink(socialContent, platform.name, data.socialMediaLinks[platform.key]);
+              hasSocial = true;
+            }
+          });
+          if (data.socialMediaLinks.other && Object.keys(data.socialMediaLinks.other).length > 0) {
+            const otherLinksTitle = document.createElement('h3');
+            otherLinksTitle.textContent = 'Other Detected Links';
+            otherLinksTitle.style.marginTop = '20px';
+            socialContent.appendChild(otherLinksTitle);
+            for (const [domain, url] of Object.entries(data.socialMediaLinks.other)) {
+              // Capitalize domain for display
+              const displayName = domain.charAt(0).toUpperCase() + domain.slice(1).split('.')[0];
+              addSocialLink(socialContent, displayName, url);
+              hasSocial = true;
+            }
+          }
+        }
+        if (!hasSocial) {
+          socialContent.textContent = 'No social media links detected.';
+        }
+
+
+        // Display policy pages
+        const policiesContent = document.getElementById('policies-content');
+        policiesContent.innerHTML = ''; // Clear previous results
+        let hasPolicy = false;
+        if (data.pageContent) {
+          const policyTypes = [
+            { key: 'privacyPolicy', name: 'Privacy Policy' }, { key: 'termsOfService', name: 'Terms of Service' },
+            { key: 'usageAgreement', name: 'Usage Agreement' }, { key: 'returnPolicy', name: 'Return Policy' },
+            { key: 'exchangePolicy', name: 'Exchange Policy' }
+          ];
+          policyTypes.forEach(policy => {
+            if (data.pageContent[policy.key] && data.pageContent[policy.key].url) {
+              addPolicyItem(policiesContent, policy.name, data.pageContent[policy.key]);
+              hasPolicy = true;
+            }
+          });
+          if (data.pageContent.other && Object.keys(data.pageContent.other).length > 0) {
+             const otherPoliciesTitle = document.createElement('h3');
+             otherPoliciesTitle.textContent = 'Other Policies/Legal Pages';
+             otherPoliciesTitle.style.marginTop = '20px';
+             policiesContent.appendChild(otherPoliciesTitle);
+            for (const [key, policyData] of Object.entries(data.pageContent.other)) {
+              if (policyData.url) {
+                const readableName = key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                addPolicyItem(policiesContent, readableName, policyData);
+                hasPolicy = true;
+              }
+            }
+          }
+        }
+         if (!hasPolicy) {
+          policiesContent.textContent = 'No policy pages detected.';
+        }
+
+
+        // Display raw JSON
+        document.getElementById('json-content').textContent = JSON.stringify(data, null, 2);
+
+        resultSection.style.display = 'block'; // Show results section
+      }
+
+      function addMetadataItem(container, label, value) {
+        const item = document.createElement('div');
+        item.className = 'metadata-item';
+        // Sanitize value before inserting as HTML
+        const valueSpan = document.createElement('span');
+        valueSpan.textContent = value;
+        item.innerHTML = `<strong>${label}:</strong> `;
+        item.appendChild(valueSpan);
+        container.appendChild(item);
+      }
+
+       function addTagList(container, label, tags) {
+           const item = document.createElement('div');
+           item.className = 'metadata-item';
+           item.innerHTML = `<strong>${label}:</strong>`;
+           const list = document.createElement('ul');
+           list.style.marginTop = '5px';
+           list.style.paddingLeft = '20px';
+           for (const [key, value] of Object.entries(tags)) {
+               const listItem = document.createElement('li');
+               // Sanitize key and value
+               const keySpan = document.createElement('span');
+               keySpan.textContent = key;
+               const valueSpan = document.createElement('span');
+               valueSpan.textContent = `: ${value}`;
+               listItem.appendChild(keySpan);
+               listItem.appendChild(valueSpan);
+               list.appendChild(listItem);
+           }
+           item.appendChild(list);
+           container.appendChild(item);
+       }
+
+
+      function addSocialLink(container, platform, url) {
+        const item = document.createElement('div');
+        item.className = 'link-item social-link';
+        const icon = document.createElement('i');
+        icon.className = 'social-icon';
+        // Optional: Add specific icons based on platform if desired
+        // Example: if (platform.toLowerCase() === 'facebook') icon.style.backgroundImage = 'url(...)';
+
+        const linkDiv = document.createElement('div');
+        const strong = document.createElement('strong');
+        strong.textContent = `${platform}: `; // Add colon and space
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer'; // Security best practice
+        link.textContent = url;
+
+        linkDiv.appendChild(strong);
+        linkDiv.appendChild(link);
+        item.appendChild(icon);
+        item.appendChild(linkDiv);
+        container.appendChild(item);
+      }
+
+      function addPolicyItem(container, policyName, policyData) {
+        const item = document.createElement('div');
+        item.className = 'link-item';
+
+        const strong = document.createElement('strong');
+        strong.textContent = `${policyName}: `;
+        const link = document.createElement('a');
+        link.href = policyData.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = policyData.url;
+
+        item.appendChild(strong);
+        item.appendChild(link);
+
+        if (policyData.content) {
+          const contentId = `policy-content-${policyName.replace(/\s+/g, '-')}-${Math.random().toString(36).substring(2, 7)}`;
+          const toggle = document.createElement('div');
+          toggle.className = 'toggle-content';
+          toggle.setAttribute('data-target', contentId);
+          toggle.textContent = 'Show Content';
+          toggle.style.cursor = 'pointer'; // Ensure cursor indicates clickability
+
+          const contentDiv = document.createElement('pre'); // Use <pre> for policy content
+          contentDiv.className = 'policy-content';
+          contentDiv.id = contentId;
+          contentDiv.style.display = 'none';
+          contentDiv.textContent = policyData.content; // Use textContent for safety
+
+          item.appendChild(toggle);
+          item.appendChild(contentDiv);
+
+          toggle.addEventListener('click', () => {
+            const target = document.getElementById(toggle.getAttribute('data-target'));
+            const isHidden = target.style.display === 'none';
+            target.style.display = isHidden ? 'block' : 'none';
+            toggle.textContent = isHidden ? 'Hide Content' : 'Show Content';
+          });
+        } else if (fetchContentCheckbox.checked) {
+            // Indicate if content wasn't fetched or found
+            const noContentSpan = document.createElement('span');
+            noContentSpan.textContent = ' (Content not fetched or found)';
+            noContentSpan.style.fontSize = '0.9em';
+            noContentSpan.style.color = '#777';
+            item.appendChild(noContentSpan);
+        }
+
+
+        container.appendChild(item);
+      }
+    });
+  </script>
+</body>
+</html>
