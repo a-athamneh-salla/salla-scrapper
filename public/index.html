@@ -305,6 +305,70 @@
   </div>
 
   <script>
+    // Authentication utilities for time-based token generation
+    const Auth = {
+      // Secret key should match the one in backend, in production you'd use environment variables
+      // and a more secure way to store and retrieve this
+      SECRET_KEY: "webscrapper_secret_key_2025",
+      
+      /**
+       * Generate a SHA-256 hash using the Web Crypto API
+       * @param {string} message - The message to hash
+       * @returns {Promise<string>} - The hex string representation of the hash
+       */
+      async generateSHA256Hash(message) {
+        // Convert the message string to an ArrayBuffer
+        const encoder = new TextEncoder();
+        const data = encoder.encode(message);
+        
+        // Generate the hash using the SubtleCrypto API
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        
+        // Convert the hash to a hexadecimal string
+        return Array.from(new Uint8Array(hashBuffer))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+      },
+      
+      /**
+       * Generate an authentication token based on the current timestamp (minute precision)
+       * @returns {Promise<{token: string, timestamp: number}>} - Object containing token and timestamp
+       */
+      async generateToken() {
+        // Get current timestamp and floor to the current minute (seconds = 0)
+        const now = new Date();
+        const timestamp = Math.floor(now.getTime() / 60000) * 60; // In seconds, floored to the minute
+        
+        // Generate HMAC
+        const message = `${timestamp}:${this.SECRET_KEY}`;
+        const token = await this.generateSHA256Hash(message);
+        
+        return { token, timestamp };
+      },
+      
+      /**
+       * Add authentication headers to a fetch Request object or URL
+       * @param {string|Request} input - The request or URL to authenticate
+       * @param {Object} init - The init options for fetch
+       * @returns {Promise<{input: string|Request, init: Object}>} - The authenticated request parameters
+       */
+      async authenticateRequest(input, init = {}) {
+        // Generate a fresh authentication token
+        const { token, timestamp } = await this.generateToken();
+        
+        // Create headers if they don't exist
+        if (!init.headers) {
+          init.headers = {};
+        }
+        
+        // Add authentication headers
+        init.headers['X-Auth-Token'] = token;
+        init.headers['X-Auth-Timestamp'] = timestamp.toString();
+        
+        return { input, init };
+      }
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
       const urlInput = document.getElementById('url-input');
       const fetchContentCheckbox = document.getElementById('fetch-content');
@@ -355,7 +419,10 @@
         try {
           // Construct the API URL relative to the current host
           const apiUrl = `/api/scrape?url=${encodeURIComponent(url)}&fetchContent=${fetchContent}`;
-          const response = await fetch(apiUrl);
+          
+          // Authenticate the request
+          const { input, init } = await Auth.authenticateRequest(apiUrl, {});
+          const response = await fetch(input, init);
 
           // Try to parse JSON, handle potential text errors
           let data;

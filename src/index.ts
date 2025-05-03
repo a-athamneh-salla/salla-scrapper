@@ -10,6 +10,109 @@
 
 import * as cheerio from 'cheerio';
 
+// Authentication configuration
+const AUTH_CONFIG = {
+  // This should be a secure, long random string in production
+  SECRET_KEY: "webscrapper_secret_key_2025",
+  // Token validity window in minutes (allows for clock skew)
+  VALIDITY_WINDOW_MINUTES: 2,
+  // Whether authentication is enforced
+  ENFORCE_AUTH: true
+};
+
+/**
+ * Authentication utilities for time-based token generation and validation
+ */
+const Auth = {
+  /**
+   * Generate HMAC for time-based authentication
+   * @param timestamp - Timestamp in seconds, floored to the minute
+   * @returns HMAC digest as hex string
+   */
+  async generateHmac(timestamp: number): Promise<string> {
+    // In a real browser environment, we would use the Web Crypto API
+    // For Cloudflare Workers, we'll use the crypto module
+    const encoder = new TextEncoder();
+    const data = encoder.encode(`${timestamp}:${AUTH_CONFIG.SECRET_KEY}`);
+    
+    // Create a SHA-256 hash of the data (using async digest instead of digestSync)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    
+    // Convert the hash to hex string
+    return Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  },
+  
+  /**
+   * Generate a time-based authentication token
+   * @returns Promise resolving to object containing the token and timestamp
+   */
+  async generateToken(): Promise<{ token: string, timestamp: number }> {
+    // Get current timestamp and floor to the current minute (seconds = 0)
+    const now = new Date();
+    const timestamp = Math.floor(now.getTime() / 60000) * 60; // In seconds, floored to the minute
+    
+    // Generate HMAC
+    const token = await Auth.generateHmac(timestamp);
+    
+    return { token, timestamp };
+  },
+  
+  /**
+   * Validate a time-based authentication token
+   * @param token - The authentication token to validate
+   * @param timestamp - The timestamp used to generate the token
+   * @returns Promise resolving to boolean indicating whether the token is valid
+   */
+  async validateToken(token: string, timestamp: number): Promise<boolean> {
+    // Allow for a window of validity to account for clock skew
+    const now = Math.floor(Date.now() / 60000) * 60; // Current time floored to minute
+    const windowStart = now - (AUTH_CONFIG.VALIDITY_WINDOW_MINUTES * 60);
+    const windowEnd = now + (AUTH_CONFIG.VALIDITY_WINDOW_MINUTES * 60);
+    
+    // Check if the timestamp is within the validity window
+    if (timestamp < windowStart || timestamp > windowEnd) {
+      console.log("Authentication failed: Token timestamp outside validity window");
+      return false;
+    }
+    
+    // Generate expected token for the provided timestamp
+    const expectedToken = await Auth.generateHmac(timestamp);
+    
+    // Compare the provided token with the expected token
+    const isValid = expectedToken === token;
+    if (!isValid) {
+      console.log("Authentication failed: Token mismatch");
+    }
+    
+    return isValid;
+  },
+  
+  /**
+   * Middleware to authenticate API requests
+   * @param request - The incoming HTTP request
+   * @returns Promise resolving to boolean indicating whether the request is authenticated
+   */
+  async authenticateRequest(request: Request): Promise<boolean> {
+    // Skip authentication if not enforced
+    if (!AUTH_CONFIG.ENFORCE_AUTH) return true;
+    
+    // Get authentication headers
+    const authToken = request.headers.get('X-Auth-Token');
+    const authTimestamp = request.headers.get('X-Auth-Timestamp');
+    
+    // Check if authentication headers are present
+    if (!authToken || !authTimestamp) {
+      console.log("Authentication failed: Missing auth headers");
+      return false;
+    }
+    
+    // Validate the token
+    return await Auth.validateToken(authToken, parseInt(authTimestamp));
+  }
+};
+
 // Interface for the extracted data
 interface ScrapedData {
   url: string;
@@ -870,6 +973,14 @@ export default {
 
     switch (url.pathname) {
       case '/api/scrape':
+        // Authenticate the request
+        if (!await Auth.authenticateRequest(request)) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          });
+        }
+
         // Get URL to scrape from query string
         const targetUrl = url.searchParams.get('url');
         const fetchContent = url.searchParams.get('fetchContent') === 'true';

@@ -1,6 +1,70 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as cheerio from 'cheerio';
 
+// Authentication configuration for testing
+const AUTH_CONFIG = {
+  SECRET_KEY: "test_secret_key",
+  VALIDITY_WINDOW_MINUTES: 2,
+  ENFORCE_AUTH: true
+};
+
+// Auth utility for testing
+const Auth = {
+  generateHmac: (timestamp: number): string => {
+    // Simple HMAC simulation for testing
+    const message = `${timestamp}:${AUTH_CONFIG.SECRET_KEY}`;
+    // Use Node.js crypto module for testing
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(message).digest('hex');
+  },
+  
+  generateToken: (): { token: string, timestamp: number } => {
+    // Get current timestamp and floor to the current minute (seconds = 0)
+    const now = new Date();
+    const timestamp = Math.floor(now.getTime() / 60000) * 60; // In seconds, floored to the minute
+    
+    // Generate HMAC
+    const token = Auth.generateHmac(timestamp);
+    
+    return { token, timestamp };
+  },
+  
+  validateToken: (token: string, timestamp: number): boolean => {
+    // Allow for a window of validity to account for clock skew
+    const now = Math.floor(Date.now() / 60000) * 60; // Current time floored to minute
+    const windowStart = now - (AUTH_CONFIG.VALIDITY_WINDOW_MINUTES * 60);
+    const windowEnd = now + (AUTH_CONFIG.VALIDITY_WINDOW_MINUTES * 60);
+    
+    // Check if the timestamp is within the validity window
+    if (timestamp < windowStart || timestamp > windowEnd) {
+      return false;
+    }
+    
+    // Generate expected token for the provided timestamp
+    const expectedToken = Auth.generateHmac(timestamp);
+    
+    // Compare the provided token with the expected token
+    return expectedToken === token;
+  },
+  
+  authenticateRequest: (request: Request): boolean => {
+    // Skip authentication if not enforced
+    if (!AUTH_CONFIG.ENFORCE_AUTH) return true;
+    
+    // Get authentication headers
+    const authToken = request.headers.get('X-Auth-Token');
+    const authTimestamp = request.headers.get('X-Auth-Timestamp');
+    
+    // Check if authentication headers are present
+    if (!authToken || !authTimestamp) {
+      return false;
+    }
+    
+    // Validate the token
+    return Auth.validateToken(authToken, parseInt(authTimestamp));
+  }
+};
+
 // Create a minimal mock for testing instead of using Miniflare which has module issues
 const mockWorker = {
   extractTaxInformation: async ($: cheerio.CheerioAPI, baseUrl: string) => {
@@ -393,6 +457,47 @@ describe('Web Scraper', () => {
       // Should return an object even with no logo
       expect(result).toBeDefined();
       expect(result.url).toBeUndefined();
+    });
+  });
+
+  describe('Authentication System', () => {
+    it('Should generate a valid token', () => {
+      const { token, timestamp } = Auth.generateToken();
+      expect(token).toBeDefined();
+      expect(timestamp).toBeDefined();
+    });
+
+    it('Should validate a token within the validity window', () => {
+      const { token, timestamp } = Auth.generateToken();
+      const isValid = Auth.validateToken(token, timestamp);
+      expect(isValid).toBe(true);
+    });
+
+    it('Should reject a token outside the validity window', () => {
+      const { token, timestamp } = Auth.generateToken();
+      const invalidTimestamp = timestamp - (AUTH_CONFIG.VALIDITY_WINDOW_MINUTES * 60 * 2); // Outside window
+      const isValid = Auth.validateToken(token, invalidTimestamp);
+      expect(isValid).toBe(false);
+    });
+
+    it('Should authenticate a request with valid headers', () => {
+      const { token, timestamp } = Auth.generateToken();
+      const request = new Request('https://example.com', {
+        headers: {
+          'X-Auth-Token': token,
+          'X-Auth-Timestamp': timestamp.toString()
+        }
+      });
+      const isAuthenticated = Auth.authenticateRequest(request);
+      expect(isAuthenticated).toBe(true);
+    });
+
+    it('Should reject a request with missing headers', () => {
+      const request = new Request('https://example.com', {
+        headers: {}
+      });
+      const isAuthenticated = Auth.authenticateRequest(request);
+      expect(isAuthenticated).toBe(false);
     });
   });
 });
