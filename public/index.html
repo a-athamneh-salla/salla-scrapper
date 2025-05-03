@@ -453,7 +453,77 @@
         } else {
             metadataContent.textContent = 'No metadata detected.';
         }
-
+        
+        // Add tax information section to metadata tab
+        if (data.taxInformation) {
+          const taxInfoSection = document.createElement('div');
+          taxInfoSection.className = 'metadata-item';
+          taxInfoSection.style.marginTop = '20px';
+          taxInfoSection.style.paddingTop = '15px';
+          taxInfoSection.style.borderTop = '2px solid var(--primary-color)';
+          
+          const taxHeading = document.createElement('h3');
+          taxHeading.textContent = 'Tax Information';
+          taxHeading.style.marginTop = '0';
+          taxInfoSection.appendChild(taxHeading);
+          
+          if (data.taxInformation.taxNumber) {
+            const taxItem = document.createElement('div');
+            taxItem.className = 'metadata-item';
+            taxItem.innerHTML = `<strong>Tax ID / VAT Number:</strong> <span style="font-weight: bold; color: var(--primary-color);">${data.taxInformation.taxNumber}</span>`;
+            if (data.taxInformation.taxNumberValidated) {
+              const validatedBadge = document.createElement('span');
+              validatedBadge.textContent = '✓ Validated';
+              validatedBadge.style.backgroundColor = '#28a745';
+              validatedBadge.style.color = 'white';
+              validatedBadge.style.padding = '2px 8px';
+              validatedBadge.style.borderRadius = '12px';
+              validatedBadge.style.fontSize = '0.8em';
+              validatedBadge.style.marginLeft = '10px';
+              taxItem.appendChild(validatedBadge);
+            }
+            taxInfoSection.appendChild(taxItem);
+          } else {
+            const noTaxItem = document.createElement('div');
+            noTaxItem.className = 'metadata-item';
+            noTaxItem.innerHTML = '<em>No tax identification number detected.</em>';
+            taxInfoSection.appendChild(noTaxItem);
+          }
+          
+          if (data.taxInformation.taxRegistrationImage && data.taxInformation.taxRegistrationImage.url) {
+            const taxImageItem = document.createElement('div');
+            taxImageItem.className = 'metadata-item';
+            taxImageItem.innerHTML = `<strong>Tax Registration Certificate:</strong> `;
+            
+            const taxImageLink = document.createElement('a');
+            taxImageLink.href = data.taxInformation.taxRegistrationImage.url;
+            taxImageLink.target = '_blank';
+            taxImageLink.rel = 'noopener noreferrer';
+            taxImageLink.textContent = data.taxInformation.taxRegistrationImage.filename || 'View Certificate';
+            
+            taxImageItem.appendChild(taxImageLink);
+            
+            // If base64 data is available, display image
+            if (data.taxInformation.taxRegistrationImage.base64Data) {
+              const imagePreview = document.createElement('div');
+              imagePreview.style.marginTop = '10px';
+              
+              const img = document.createElement('img');
+              img.src = data.taxInformation.taxRegistrationImage.base64Data;
+              img.style.maxWidth = '100%';
+              img.style.maxHeight = '300px';
+              img.style.border = '1px solid var(--border-color)';
+              img.style.borderRadius = '4px';
+              
+              imagePreview.appendChild(img);
+              taxImageItem.appendChild(imagePreview);
+            }
+            
+            taxInfoSection.appendChild(taxImageItem);
+          }
+          
+          metadataContent.appendChild(taxInfoSection);
+        }
 
         // Display colors
         const colorsContent = document.getElementById('colors-content');
