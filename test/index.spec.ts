@@ -90,6 +90,75 @@ const mockWorker = {
     }
     
     return result;
+  },
+  
+  extractWebsiteLogo: async ($: cheerio.CheerioAPI, baseUrl: string) => {
+    const result = {
+      url: undefined as string | undefined,
+      alt: undefined as string | undefined,
+      width: undefined as number | undefined,
+      height: undefined as number | undefined,
+      base64Data: undefined as string | undefined
+    };
+    
+    try {
+      // Simplified logo extraction for testing
+      // Look for logo in header first
+      let logoFound = false;
+      
+      // Check for logo in header
+      $('header img[src*="logo"], img.logo, .logo img').each(function() {
+        const img = $(this);
+        const src = img.attr('src');
+        if (src) {
+          result.url = new URL(src, baseUrl).href;
+          result.alt = img.attr('alt') || '';
+          result.width = parseInt(img.attr('width') || '0') || undefined;
+          result.height = parseInt(img.attr('height') || '0') || undefined;
+          logoFound = true;
+          return false; // Break the each loop
+        }
+      });
+      
+      // If not found in header, look for logo in common places
+      if (!logoFound) {
+        $('img[alt*="logo"], .brand img, .site-logo img').each(function() {
+          const img = $(this);
+          const src = img.attr('src');
+          if (src) {
+            result.url = new URL(src, baseUrl).href;
+            result.alt = img.attr('alt') || '';
+            result.width = parseInt(img.attr('width') || '0') || undefined;
+            result.height = parseInt(img.attr('height') || '0') || undefined;
+            logoFound = true;
+            return false;
+          }
+        });
+      }
+      
+      // Last resort - first image in the page
+      if (!logoFound) {
+        const firstImg = $('img').first();
+        const src = firstImg.attr('src');
+        if (src) {
+          result.url = new URL(src, baseUrl).href;
+          result.alt = firstImg.attr('alt') || '';
+          result.width = parseInt(firstImg.attr('width') || '0') || undefined;
+          result.height = parseInt(firstImg.attr('height') || '0') || undefined;
+        }
+      }
+      
+      // Mock base64 data generation for test
+      if (result.url) {
+        if (result.url.includes('logo')) {
+          result.base64Data = 'data:image/png;base64,mockBase64Data';
+        }
+      }
+    } catch (error) {
+      console.error("Error in mock logo extraction:", error);
+    }
+    
+    return result;
   }
 };
 
@@ -111,6 +180,16 @@ describe('Web Scraper', () => {
           headers: new Headers({
             'content-type': 'image/jpeg',
             'etag': 'abc123',
+            'last-modified': 'Wed, 21 Oct 2023 07:28:00 GMT'
+          }),
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+        });
+      } else if (url.includes('logo.png')) {
+        return Promise.resolve({
+          ok: true,
+          headers: new Headers({
+            'content-type': 'image/png',
+            'etag': 'logo123',
             'last-modified': 'Wed, 21 Oct 2023 07:28:00 GMT'
           }),
           arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
@@ -206,6 +285,114 @@ describe('Web Scraper', () => {
       // Should still return a result object despite the error
       expect(result).toBeDefined();
       expect(result.taxNumberValidated).toBe(false);
+    });
+  });
+
+  describe('Logo Extraction', () => {
+    it('Should extract logo from header', async () => {
+      // Create HTML with a logo in the header
+      const html = `
+        <html>
+          <body>
+            <header>
+              <div class="brand">
+                <img src="/images/logo.png" alt="Company Logo" width="150" height="60" />
+              </div>
+            </header>
+          </body>
+        </html>
+      `;
+      
+      const $ = cheerio.load(html);
+      const result = await mockWorker.extractWebsiteLogo($, 'https://example.com');
+      
+      // Verify that the logo was extracted correctly
+      expect(result).toBeDefined();
+      expect(result.url).toBe('https://example.com/images/logo.png');
+      expect(result.alt).toBe('Company Logo');
+      expect(result.width).toBe(150);
+      expect(result.height).toBe(60);
+      expect(result.base64Data).toBeDefined();
+    });
+    
+    it('Should extract logo using class selectors', async () => {
+      // Create HTML with a logo identified by class
+      const html = `
+        <html>
+          <body>
+            <div>
+              <div class="logo">
+                <img src="/assets/brand-logo.png" alt="Brand Logo" />
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const $ = cheerio.load(html);
+      const result = await mockWorker.extractWebsiteLogo($, 'https://example.com');
+      
+      // Verify that the logo was extracted correctly
+      expect(result).toBeDefined();
+      expect(result.url).toBe('https://example.com/assets/brand-logo.png');
+      expect(result.alt).toBe('Brand Logo');
+    });
+    
+    it('Should find logo based on alt text', async () => {
+      // Create HTML with a logo identified by alt text
+      const html = `
+        <html>
+          <body>
+            <div>
+              <img src="/images/site-icon.png" alt="Company Logo for Site" />
+              <img src="/images/banner.jpg" alt="Banner Image" />
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const $ = cheerio.load(html);
+      const result = await mockWorker.extractWebsiteLogo($, 'https://example.com');
+      
+      // Verify that the logo was extracted correctly
+      expect(result).toBeDefined();
+      expect(result.url).toBe('https://example.com/images/site-icon.png');
+      expect(result.alt).toBe('Company Logo for Site');
+    });
+    
+    it('Should return first image as fallback if no clear logo is found', async () => {
+      // Create HTML with no clear logo indicators
+      const html = `
+        <html>
+          <body>
+            <div>
+              <p>Some text</p>
+              <img src="/images/generic-image.jpg" alt="Generic Image" />
+              <img src="/images/another-image.jpg" alt="Another Image" />
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const $ = cheerio.load(html);
+      const result = await mockWorker.extractWebsiteLogo($, 'https://example.com');
+      
+      // Verify that the first image was used as fallback
+      expect(result).toBeDefined();
+      expect(result.url).toBe('https://example.com/images/generic-image.jpg');
+      expect(result.alt).toBe('Generic Image');
+    });
+    
+    it('Should handle empty HTML gracefully', async () => {
+      // Create empty HTML
+      const html = `<html><body></body></html>`;
+      
+      const $ = cheerio.load(html);
+      const result = await mockWorker.extractWebsiteLogo($, 'https://example.com');
+      
+      // Should return an object even with no logo
+      expect(result).toBeDefined();
+      expect(result.url).toBeUndefined();
     });
   });
 });

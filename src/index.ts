@@ -22,6 +22,14 @@ interface ScrapedData {
     ogTags?: Record<string, string>;
     twitterTags?: Record<string, string>;
   };
+  // Add logo to the interface
+  logo?: {
+    url?: string;
+    alt?: string;
+    width?: number;
+    height?: number;
+    base64Data?: string;
+  };
   colors: string[];
   socialMediaLinks: {
     facebook?: string;
@@ -598,6 +606,250 @@ async function extractTaxInformation($: cheerio.CheerioAPI, baseUrl: string): Pr
   return result;
 }
 
+/**
+ * Function to extract the website logo
+ * Uses multiple methods to find and extract the most likely logo image on the webpage
+ * @param $ - Cheerio instance loaded with the webpage HTML
+ * @param baseUrl - Base URL of the webpage for resolving relative URLs
+ * @returns Object containing logo information or undefined if not found
+ */
+async function extractWebsiteLogo($: cheerio.CheerioAPI, baseUrl: string): Promise<{
+  url?: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  base64Data?: string;
+} | undefined> {
+  console.log("Starting logo extraction for", baseUrl);
+  
+  try {
+    // Score-based approach to identify the most likely logo
+    const logoSelectors = [
+      // Common logo selectors with high priority
+      'header img[src*="logo"]', 'img.logo', 'img#logo', '.logo img', '#logo img',
+      'a.navbar-brand img', '.navbar-brand img', '.brand img', '.site-logo img', '.site-branding img',
+      '.logo-img', '.header-logo img', '.site-title img', 'a[aria-label="home"] img',
+      'img[alt*="logo"]', 'img[alt*="brand"]',
+      
+      // Arabic specific selectors
+      'img[alt*="شعار"]', '.brand-logo img', '.header-logo', 
+      
+      // Website-specific selectors for the three target sites
+      // Zyros.com
+      '.navbar-logo img', '.zid-header-logo img', '.zid-container img[alt*="زايروس"]', '.site-logo-img',
+      // Rashof.com
+      '.main-header img', 'img[alt*="رشوف"]', 'img[alt*="عسل"]', 
+      // dkhoonemirates.com
+      'img.zid-nav-logo__logo', 'header img[alt*="دخون"]', 'a[title*="دخون"] img',
+      
+      // Additional selectors for Arabic websites
+      '.site-title a img', 'a.logo img', '[class*="logo"] img', '[id*="logo"] img',
+      'header .logo', '.header__logo img', '.header__logo-image',
+      '.navbar a img:first-child', 
+      
+      // Specific selectors for the three websites
+      'img[src*="brand"]', '#masthead img:first-child', '.navbar-brand img', 'img.navbar-brand',
+      '.main-logo', '.site-branding img', 'img[alt*="name"]',
+      '.zid-nav-logo img', '.zid-container img', '.zid-header-logo',
+      
+      // Less specific but still likely logo locations
+      'header .brand img', 'nav .brand img', '.navigation img:first-child',
+      'header a:first-child img', '#masthead img', '.masthead img',
+      
+      // Most websites place logos in the header/top section
+      'header img:first-of-type', '#header img:first-of-type', '.header img:first-of-type',
+      '.site-header img', '#site-header img',
+      
+      // SVG logos
+      'header svg', '.logo svg', '#logo svg', '.brand svg',
+      
+      // Fallbacks for simpler sites
+      'body > header img', 'header > a > img', 'nav > a > img', '.wrapper > img:first-child', 
+    ];
+    
+    // Store potential logo elements with their scores
+    interface LogoCandidate {
+      element: cheerio.Element;
+      score: number;
+      url: string;
+    }
+    
+    const logoCandidates: LogoCandidate[] = [];
+    
+    // Find all potential logo images
+    for (let i = 0; i < logoSelectors.length; i++) {
+      const selector = logoSelectors[i];
+      const elements = $(selector);
+      
+      elements.each((_, element) => {
+        // Get image URL (img src or svg content)
+        let logoUrl;
+        const isImg = element.tagName === 'img';
+        const isSvg = element.tagName === 'svg';
+        
+        if (isImg) {
+          logoUrl = $(element).attr('src');
+        } else if (isSvg) {
+          // For SVG elements, we'd need to extract the entire SVG
+          // This is more complex and we'll skip base64 encoding for SVGs
+          return;
+        }
+        
+        if (!logoUrl) return;
+        
+        // Convert to absolute URL
+        const absoluteUrl = new URL(logoUrl, baseUrl).href;
+        
+        // Calculate score based on:
+        // 1. Selector priority (earlier in array = higher priority)
+        // 2. Position in page (closer to top = higher priority)
+        // 3. Size of image if available
+        // 4. URL and alt text containing "logo"
+        let score = 100 - (i * 3); // Base score from selector priority (0-100)
+        
+        // Check if URL contains "logo"
+        if (/logo/i.test(absoluteUrl)) score += 20;
+        
+        // Check alt text
+        const alt = $(element).attr('alt');
+        if (alt) {
+          if (/logo|brand|شعار/i.test(alt)) score += 15;
+          // Penalize icons and non-logos
+          if (/icon|button|banner|background|placeholder|profile|avatar/i.test(alt)) score -= 30;
+        }
+        
+        // Check dimensions - logos are typically reasonable size, not too small or large
+        const width = parseInt($(element).attr('width') || '0');
+        const height = parseInt($(element).attr('height') || '0');
+        
+        if (width > 0 && height > 0) {
+          if (width >= 30 && width <= 400 && height >= 30 && height <= 200) {
+            score += 10;
+          } else if (width < 20 || height < 20) {
+            // Too small, likely an icon
+            score -= 20;
+          } else if (width > 600 || height > 600) {
+            // Too large, likely a banner or hero image
+            score -= 20;
+          }
+        }
+        
+        // Check for icons/small graphics that aren't logos
+        if (/icon|button|indicator|arrow|close|menu/i.test(absoluteUrl)) score -= 25;
+        
+        // Position-based scoring - simpler approach without using height/position methods
+        // Images in the header or navigation areas are more likely to be logos
+        if ($(element).parents('header, .header, #header, nav, .navigation, .navbar, .nav').length > 0) {
+          score += 15;
+        }
+        
+        // Add to candidates
+        logoCandidates.push({
+          element,
+          score,
+          url: absoluteUrl
+        });
+      });
+    }
+    
+    // Sort by score and get the best candidate
+    logoCandidates.sort((a, b) => b.score - a.score);
+    
+    // Get the best candidate if any
+    if (logoCandidates.length > 0) {
+      const bestCandidate = logoCandidates[0];
+      console.log(`Found logo candidate with score ${bestCandidate.score}:`, bestCandidate.url);
+      
+      const element = $(bestCandidate.element);
+      const isImg = bestCandidate.element.tagName === 'img';
+      const logoUrl = bestCandidate.url;
+      
+      // Get image dimensions and alt text
+      const alt = isImg ? element.attr('alt') || '' : '';
+      const width = parseInt(element.attr('width') || '0');
+      const height = parseInt(element.attr('height') || '0');
+      
+      // Try to fetch the image and convert to base64 (only for img tags)
+      if (isImg) {
+        try {
+          console.log("Fetching logo image:", logoUrl);
+          
+          // Add a delay before fetching to respect rate limits
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          const imageResponse = await fetch(logoUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+              'Referer': baseUrl,
+            },
+          });
+          
+          if (!imageResponse.ok) {
+            console.error(`Failed to fetch logo: ${imageResponse.status} ${imageResponse.statusText}`);
+            // Return what we have even if base64 data is missing
+            return {
+              url: logoUrl,
+              alt,
+              width: width || undefined,
+              height: height || undefined
+            };
+          }
+          
+          // Verify the content type is an image
+          const contentType = imageResponse.headers.get('content-type');
+          if (!contentType || !contentType.startsWith('image/')) {
+            console.error(`Logo URL does not return an image: ${contentType}`);
+            return {
+              url: logoUrl,
+              alt,
+              width: width || undefined,
+              height: height || undefined
+            };
+          }
+          
+          // Get the image data and convert to base64
+          const imageBuffer = await imageResponse.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(imageBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+          );
+          
+          return {
+            url: logoUrl,
+            alt,
+            width: width || undefined,
+            height: height || undefined,
+            base64Data: `data:${contentType};base64,${base64}`
+          };
+        } catch (error) {
+          console.error("Error processing logo image:", error);
+          // Return basic info without base64 data
+          return {
+            url: logoUrl,
+            alt,
+            width: width || undefined,
+            height: height || undefined
+          };
+        }
+      } else {
+        // Non-image element (e.g., SVG) - just return URL info
+        return {
+          url: logoUrl,
+          alt,
+          width: width || undefined,
+          height: height || undefined
+        };
+      }
+    }
+    
+    console.log("No logo found on the page");
+    return undefined;
+    
+  } catch (error) {
+    console.error("Error in logo extraction:", error);
+    return undefined;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -707,6 +959,11 @@ export default {
             data.taxInformation?.taxRegistrationImage?.url ? `Found tax image: ${data.taxInformation.taxRegistrationImage.url}` : 'No tax image found'
           );
 
+          // Extract website logo
+          console.log('Starting logo extraction');
+          data.logo = await extractWebsiteLogo($, targetUrl);
+          console.log('Logo extracted:', data.logo?.url ? `Found logo: ${data.logo.url}` : 'No logo found');
+
           // If fetchContent flag is true, fetch content for each policy page
           if (fetchContent) {
             const policyFetches = [];
@@ -782,7 +1039,8 @@ export default {
             colors: "Detects dominant colors used on the website",
             socialLinks: "Finds links to social media profiles",
             policyPages: "Locates privacy policy, terms of service, and other legal pages",
-            taxInformation: "Extracts tax identification numbers and tax registration certificate images"
+            taxInformation: "Extracts tax identification numbers and tax registration certificate images",
+            logo: "Extracts the website logo"
           }
         };
 

@@ -434,6 +434,59 @@
         metadataContent.innerHTML = ''; // Clear previous results
         if (data.metadata && Object.keys(data.metadata).length > 0) {
           addMetadataItem(metadataContent, 'URL Scraped', data.url); // Add the scraped URL
+          
+          // Add logo section to metadata tab
+          if (data.logo && data.logo.url) {
+            const logoSection = document.createElement('div');
+            logoSection.className = 'metadata-item';
+            logoSection.style.marginTop = '15px';
+            
+            const logoTitle = document.createElement('strong');
+            logoTitle.textContent = 'Website Logo:';
+            logoSection.appendChild(logoTitle);
+            
+            const logoContainer = document.createElement('div');
+            logoContainer.style.marginTop = '10px';
+            logoContainer.style.textAlign = 'center';
+            logoContainer.style.padding = '15px';
+            logoContainer.style.border = '1px solid var(--border-color)';
+            logoContainer.style.borderRadius = '4px';
+            logoContainer.style.backgroundColor = '#f9f9f9';
+            
+            const logoImg = document.createElement('img');
+            // Use base64 data if available, otherwise use URL
+            logoImg.src = data.logo.base64Data || data.logo.url;
+            logoImg.alt = data.logo.alt || 'Website Logo';
+            logoImg.style.maxWidth = '100%';
+            logoImg.style.maxHeight = '150px';
+            logoImg.style.objectFit = 'contain';
+            
+            const logoDetails = document.createElement('div');
+            logoDetails.style.marginTop = '10px';
+            logoDetails.style.fontSize = '0.9em';
+            logoDetails.style.color = '#666';
+            
+            const logoUrl = document.createElement('a');
+            logoUrl.href = data.logo.url;
+            logoUrl.textContent = data.logo.url;
+            logoUrl.target = '_blank';
+            logoUrl.rel = 'noopener noreferrer';
+            
+            logoDetails.appendChild(document.createTextNode('Source: '));
+            logoDetails.appendChild(logoUrl);
+            
+            if (data.logo.width && data.logo.height) {
+              const dimensions = document.createElement('div');
+              dimensions.textContent = `Dimensions: ${data.logo.width} × ${data.logo.height}`;
+              logoDetails.appendChild(dimensions);
+            }
+            
+            logoContainer.appendChild(logoImg);
+            logoContainer.appendChild(logoDetails);
+            logoSection.appendChild(logoContainer);
+            metadataContent.appendChild(logoSection);
+          }
+          
           if (data.metadata.title) addMetadataItem(metadataContent, 'Title', data.metadata.title);
           if (data.metadata.description) addMetadataItem(metadataContent, 'Description', data.metadata.description);
           if (data.metadata.keywords) addMetadataItem(metadataContent, 'Keywords', data.metadata.keywords);
